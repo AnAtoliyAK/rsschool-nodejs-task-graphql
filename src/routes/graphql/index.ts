@@ -257,7 +257,21 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                     return { ...user, userSubscribedToUsers, subscribedToUserUsers }
                   })
 
-                  return fullUsers;
+                  const fullUsersWithTHeirSubscriptions = fullUsers.map(async (_fullUser) => {
+                    const { userSubscribedToUsers, subscribedToUserUsers } = await _fullUser
+
+                    const fullUserSubscribedToUsers = userSubscribedToUsers?.map((_userSubscribedToUser) => {
+                      return fullUsers?.find(async (_user) => (await _user)?.id === _userSubscribedToUser?.id)
+                    })
+
+                    const fullSubscribedToUserUsers = subscribedToUserUsers?.map((_subscribedToUserUser) => {
+                      return fullUsers?.find(async (_user) => (await _user)?.id === (await _subscribedToUserUser)?.id)
+                    })
+
+                    return { ..._fullUser, userSubscribedToUsers: fullUserSubscribedToUsers, subscribedToUserUsers: fullSubscribedToUserUsers }
+                  })
+
+                  return fullUsersWithTHeirSubscriptions;
                 },
               },
             },
