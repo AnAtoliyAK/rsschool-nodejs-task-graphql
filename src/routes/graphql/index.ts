@@ -61,9 +61,27 @@ const FullUserGraphQLType = new GraphQLObjectType({
     profiles: { type: new GraphQLList(ProfileGraphQLType) },
     memberTypes: { type: new GraphQLList(MemberGraphQLType) },
     userSubscribedToProfiles: { type: new GraphQLList(ProfileGraphQLType) },
-    subscribedToPosts: { type: new GraphQLList(ProfileGraphQLType) },
+    subscribedToPosts: { type: new GraphQLList(PostGraphQLType) },
     userSubscribedToUsers: { type: new GraphQLList(UserGraphQLType) },
     subscribedToUserUsers: { type: new GraphQLList(UserGraphQLType) },
+  }),
+});
+
+const FullUserWithSubscriptionsGraphQLType = new GraphQLObjectType({
+  name: "FullUserWithSubscription",
+  fields: () => ({
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    firstName: { type: new GraphQLNonNull(GraphQLString) },
+    lastName: { type: new GraphQLNonNull(GraphQLString) },
+    email: { type: new GraphQLNonNull(GraphQLString) },
+    subscribedToUserIds: { type: new GraphQLList(GraphQLString) },
+    posts: { type: new GraphQLList(PostGraphQLType) },
+    profiles: { type: new GraphQLList(ProfileGraphQLType) },
+    memberTypes: { type: new GraphQLList(MemberGraphQLType) },
+    userSubscribedToProfiles: { type: new GraphQLList(ProfileGraphQLType) },
+    subscribedToPosts: { type: new GraphQLList(PostGraphQLType) },
+    userSubscribedToUsers: { type: new GraphQLList(FullUserGraphQLType) },
+    subscribedToUserUsers: { type: new GraphQLList(FullUserGraphQLType) },
   }),
 });
 
@@ -192,26 +210,29 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                 const posts = await fastify.db.posts.findMany({ key: 'userId', equals: args.id });
                 const profiles = await fastify.db.profiles.findMany({ key: 'userId', equals: args.id });
                 const memberTypes = profiles?.map(async (profile) => {
-                  return fastify.db.memberTypes.findMany({ key: 'id', equals: profile.memberTypeId });
+                  return await fastify.db.memberTypes.findMany({ key: 'id', equals: profile.memberTypeId });
                 })
 
                 return { ...user, posts, profiles, memberTypes };
               },
             },
-            userWithSubscribedTo: {
-              type: FullUserGraphQLType,
+            usersWithSubscribedTo: {
+              type: new GraphQLList(FullUserGraphQLType),
               async resolve() {
                 const users = await fastify.db.users.findMany();
-                const userWithSubscription = users?.map(async (user) => {
-                  const userSubscribedToProfiles = users?.filter(
+                const userWithSubscription =  users?.map((user) => {
+                  const filteredUsers =users?.filter(
                     (_user) => _user?.subscribedToUserIds?.includes(user?.id)
-                  )?.map(async (subscribedToUserId) => {
-                    return fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId?.id });
-                  })
+                  )
+
+                 const userSubscribedToProfiles = filteredUsers?.map(async (subscribedToUserId) => {
+                   return await fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId?.id });
+                 })
 
                   return { ...user, userSubscribedToProfiles }
                 })
-                return userWithSubscription;
+               
+                return userWithSubscription
               },
             },
             userWithHisSubscribedTo: {
@@ -238,41 +259,41 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
 
                 return { ...user, posts, profiles, subscribedToPosts };
               },
-              usersWithSubscriptions: {
-                type: new GraphQLList(FullUserGraphQLType),
-                async resolve() {
-                  const users = await fastify.db.users.findMany();
+            },
+            usersWithSubscriptions: {
+              type: new GraphQLList(FullUserWithSubscriptionsGraphQLType),
+              async resolve() {
+                const users = await fastify.db.users.findMany();
 
-                  const fullUsers = users?.map(async (user) => {
-                    const subscribedToUserUsers = user?.subscribedToUserIds?.map(async (userId) => {
-                      const subscribedUser = await fastify.db.users.findOne({ key: 'id', equals: userId });
+                const fullUsers = users?.map((user) => {
+                  const subscribedToUserUsers = user?.subscribedToUserIds?.map(async (userId) => {
+                    const subscribedUser = await fastify.db.users.findOne({ key: 'id', equals: userId });
 
-                      return subscribedUser
-                    })
-
-                    const userSubscribedToUsers = users?.filter(
-                      (_user) => _user?.subscribedToUserIds?.includes(user?.id)
-                    )
-
-                    return { ...user, userSubscribedToUsers, subscribedToUserUsers }
+                    return subscribedUser
                   })
 
-                  const fullUsersWithTHeirSubscriptions = fullUsers.map(async (_fullUser) => {
-                    const { userSubscribedToUsers, subscribedToUserUsers } = await _fullUser
+                  const userSubscribedToUsers = users?.filter(
+                    (_user) => _user?.subscribedToUserIds?.includes(user?.id)
+                  )
 
-                    const fullUserSubscribedToUsers = userSubscribedToUsers?.map((_userSubscribedToUser) => {
-                      return fullUsers?.find(async (_user) => (await _user)?.id === _userSubscribedToUser?.id)
-                    })
+                  return { ...user, userSubscribedToUsers, subscribedToUserUsers }
+                })
 
-                    const fullSubscribedToUserUsers = subscribedToUserUsers?.map((_subscribedToUserUser) => {
-                      return fullUsers?.find(async (_user) => (await _user)?.id === (await _subscribedToUserUser)?.id)
-                    })
+                const fullUsersWithTHeirSubscriptions = fullUsers.map(async (_fullUser) => {
+                  const { userSubscribedToUsers, subscribedToUserUsers } = await _fullUser
 
-                    return { ..._fullUser, userSubscribedToUsers: fullUserSubscribedToUsers, subscribedToUserUsers: fullSubscribedToUserUsers }
+                  const fullUserSubscribedToUsers = userSubscribedToUsers?.map((_userSubscribedToUser) => {
+                    return fullUsers?.find(async (_user) => (await _user)?.id === _userSubscribedToUser?.id)
                   })
 
-                  return fullUsersWithTHeirSubscriptions;
-                },
+                  const fullSubscribedToUserUsers = subscribedToUserUsers?.map((_subscribedToUserUser) => {
+                    return fullUsers?.find(async (_user) => (await _user)?.id === (await _subscribedToUserUser)?.id)
+                  })
+
+                  return { ..._fullUser, userSubscribedToUsers: fullUserSubscribedToUsers, subscribedToUserUsers: fullSubscribedToUserUsers }
+                })
+
+                return fullUsersWithTHeirSubscriptions;
               },
             },
           }),
