@@ -94,6 +94,29 @@ export const CreateUserGraphQLInputType = new GraphQLInputObjectType({
   }),
 });
 
+export const CreateProfileGraphQLInputType = new GraphQLInputObjectType({
+  name: "createProfileInputType",
+  fields: () => ({
+    avatar: { type: new GraphQLNonNull(GraphQLString) },
+    sex: { type: new GraphQLNonNull(GraphQLString) },
+    birthday: { type: new GraphQLNonNull(GraphQLInt) },
+    country: { type: new GraphQLNonNull(GraphQLString) },
+    street: { type: new GraphQLNonNull(GraphQLString) },
+    city: { type: new GraphQLNonNull(GraphQLString) },
+    memberTypeId: { type: new GraphQLNonNull(GraphQLString) },
+    userId: { type: new GraphQLNonNull(GraphQLString) },
+  }),
+});
+
+export const CreatePostGraphQLInputType = new GraphQLInputObjectType({
+  name: "createPostInputType",
+  fields: () => ({
+    title: { type: new GraphQLNonNull(GraphQLString) },
+    content: { type: new GraphQLNonNull(GraphQLString) },
+    userId: { type: new GraphQLNonNull(GraphQLString) },
+  }),
+});
+
 const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
   fastify
 ): Promise<void> => {
@@ -220,18 +243,18 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
               type: new GraphQLList(FullUserGraphQLType),
               async resolve() {
                 const users = await fastify.db.users.findMany();
-                const userWithSubscription =  users?.map((user) => {
-                  const filteredUsers =users?.filter(
+                const userWithSubscription = users?.map((user) => {
+                  const filteredUsers = users?.filter(
                     (_user) => _user?.subscribedToUserIds?.includes(user?.id)
                   )
 
-                 const userSubscribedToProfiles = filteredUsers?.map(async (subscribedToUserId) => {
-                   return await fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId?.id });
-                 })
+                  const userSubscribedToProfiles = filteredUsers?.map(async (subscribedToUserId) => {
+                    return await fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId?.id });
+                  })
 
                   return { ...user, userSubscribedToProfiles }
                 })
-               
+
                 return userWithSubscription
               },
             },
@@ -307,7 +330,6 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                 userDTO: { type: CreateUserGraphQLInputType },
               },
               resolve: async (_, { userDTO }) => {
-                console.log('U', userDTO)
                 const user = await fastify.db.users.create(userDTO);
 
                 return user;
@@ -316,17 +338,10 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
             createProfile: {
               type: ProfileGraphQLType,
               args: {
-                avatar: { type: new GraphQLNonNull(GraphQLString) },
-                sex: { type: new GraphQLNonNull(GraphQLString) },
-                birthday: { type: new GraphQLNonNull(GraphQLInt) },
-                country: { type: new GraphQLNonNull(GraphQLString) },
-                street: { type: new GraphQLNonNull(GraphQLString) },
-                city: { type: new GraphQLNonNull(GraphQLString) },
-                memberTypeId: { type: new GraphQLNonNull(GraphQLString) },
-                userId: { type: new GraphQLNonNull(GraphQLString) },
+                profileDTO: { type: CreateProfileGraphQLInputType },
               },
-              resolve: async (_, args) => {
-                const profile: ProfileEntity = await fastify.db.profiles.create(args);
+              resolve: async (_, { profileDTO }) => {
+                const profile: ProfileEntity = await fastify.db.profiles.create(profileDTO);
 
                 return profile;
               },
@@ -334,12 +349,10 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
             createPost: {
               type: PostGraphQLType,
               args: {
-                title: { type: new GraphQLNonNull(GraphQLString) },
-                content: { type: new GraphQLNonNull(GraphQLString) },
-                userId: { type: new GraphQLNonNull(GraphQLString) },
+                postDTO: { type: CreatePostGraphQLInputType }
               },
-              resolve: async (_, args) => {
-                const post = await fastify.db.posts.create(args);
+              resolve: async (_, { postDTO }) => {
+                const post = await fastify.db.posts.create(postDTO);
 
                 return post;
               },
