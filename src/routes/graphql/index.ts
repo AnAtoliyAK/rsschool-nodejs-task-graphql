@@ -117,6 +117,49 @@ export const CreatePostGraphQLInputType = new GraphQLInputObjectType({
   }),
 });
 
+
+export const UpdateUserGraphQLInputType = new GraphQLInputObjectType({
+  name: "updateUserInputType",
+  fields: () => ({
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    firstName: { type: GraphQLString },
+    lastName: { type: GraphQLString },
+    email: { type: GraphQLString },
+  }),
+});
+
+export const UpdateProfileGraphQLInputType = new GraphQLInputObjectType({
+  name: "updateProfileInputType",
+  fields: () => ({
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    avatar: { type: GraphQLString },
+    sex: { type: GraphQLString },
+    birthday: { type: GraphQLInt },
+    country: { type: GraphQLString },
+    street: { type: GraphQLString },
+    city: { type: GraphQLString },
+    memberTypeId: { type: GraphQLString },
+  }),
+});
+
+export const UpdatePostGraphQLInputType = new GraphQLInputObjectType({
+  name: "updatePostInputType",
+  fields: () => ({
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    title: { type: GraphQLString },
+    content: { type: GraphQLString },
+  }),
+});
+
+const UpdateMemberGraphQLInputType = new GraphQLInputObjectType({
+  name: "updateMemberTypeInputType",
+  fields: () => ({
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    discount: { type: GraphQLInt },
+    monthPostsLimit: { type: GraphQLInt },
+  }),
+});
+
 const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
   fastify
 ): Promise<void> => {
@@ -360,48 +403,104 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
             updateUser: {
               type: UserGraphQLType,
               args: {
-                id: { type: new GraphQLNonNull(GraphQLString) },
-                firstName: { type: GraphQLString },
-                lastName: { type: GraphQLString },
-                email: { type: GraphQLString },
+                userDTO: { type: UpdateUserGraphQLInputType }
               },
-              resolve: async (_, args) => {
-                const { id: userId, firstName, lastName, email } = args
+              resolve: async (_, { userDTO }) => {
+                const { id: userId, firstName, lastName, email } = userDTO
 
-                if (uuid.validate(args?.id)) {
+                if (uuid.validate(userDTO?.id)) {
                   const user = await fastify.db.users.findOne({ key: 'id', equals: userId })
 
-                  if (!user) {
-                    return null
-                  }
+                  if (user) {
 
-                  return fastify.db.users.change(userId, { firstName, lastName, email })
+                    const { firstName: _firstName, lastName: _lastName, email: _email } = user
+
+                    return fastify.db.users.change(userId, { firstName: firstName || _firstName, lastName: lastName || _lastName, email: email || _email })
+                  }
+                  return null
+
                 }
               },
             },
             updateProfile: {
               type: ProfileGraphQLType,
               args: {
-                id: { type: new GraphQLNonNull(GraphQLString) },
-                avatar: { type: GraphQLString },
-                sex: { type: GraphQLString },
-                birthday: { type: GraphQLInt },
-                country: { type: GraphQLString },
-                street: { type: GraphQLString },
-                city: { type: GraphQLString },
-                memberTypeId: { type: GraphQLString },
+                profileDTO: { type: UpdateProfileGraphQLInputType }
               },
-              resolve: async (_, args) => {
-                const { id: profileId, avatar, sex, birthday, country, street, city, memberTypeId } = args
+              resolve: async (_, { profileDTO }) => {
+                const { id: profileId, avatar, sex, birthday, country, street, city, memberTypeId } = profileDTO
 
                 if (uuid.validate(profileId)) {
                   const profile = await fastify.db.profiles.findOne({ key: 'id', equals: profileId })
+                  if (profile) {
 
-                  if (!profile) {
-                    return null
+                    const {
+                      avatar: _avatar,
+                      sex: _sex,
+                      birthday: _birthday,
+                      country: _country,
+                      street: _street,
+                      city: _city,
+                      memberTypeId: _memberTypeId
+                    } = profileDTO
+
+                    return fastify.db.profiles.change(profileId, {
+                      avatar: avatar || _avatar,
+                      sex: sex || _sex,
+                      birthday: birthday || _birthday,
+                      country: country || _country,
+                      street: street || _street,
+                      city: city || _city,
+                      memberTypeId: memberTypeId || _memberTypeId
+                    })
                   }
 
-                  return fastify.db.profiles.change(profileId, { avatar, sex, birthday, country, street, city, memberTypeId })
+                  return null
+                }
+              },
+            },
+            updatePost: {
+              type: PostGraphQLType,
+              args: {
+                postDTO: { type: UpdatePostGraphQLInputType }
+              },
+              resolve: async (_, { postDTO }) => {
+                const { id: postId, title, content } = postDTO
+
+                if (uuid.validate(postId)) {
+                  const post = await fastify.db.posts.findOne({ key: 'id', equals: postId })
+
+                  if (post) {
+                    const { title: _title, content: _content } = post
+
+                    return fastify.db.posts.change(postId, { title: title || _title, content: content || _content })
+                  }
+
+                  return null
+                }
+              },
+            },
+            updateMemberType: {
+              type: MemberGraphQLType,
+              args: {
+                memberTypeDTO: { type: UpdateMemberGraphQLInputType }
+              },
+              resolve: async (_, { memberTypeDTO }) => {
+                const { id: memberId, discount, monthPostsLimit } = memberTypeDTO
+
+                if (typeof memberId === 'string') {
+                  const member = await fastify.db.memberTypes.findOne({ key: 'id', equals: memberId })
+
+                  if (member) {
+                    const { discount: _discount, monthPostsLimit: _monthPostsLimit } = memberTypeDTO
+
+                    return fastify.db.memberTypes.change(memberId, {
+                      discount: discount || _discount,
+                      monthPostsLimit: monthPostsLimit || _monthPostsLimit
+                    })
+                  }
+
+                  return null
                 }
               },
             },
