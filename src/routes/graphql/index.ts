@@ -160,6 +160,22 @@ const UpdateMemberGraphQLInputType = new GraphQLInputObjectType({
   }),
 });
 
+const SubscribeToGraphQLInputType = new GraphQLInputObjectType({
+  name: "subscribeToInputType",
+  fields: () => ({
+    userId: { type: new GraphQLNonNull(GraphQLString) },
+    paramsId: { type: new GraphQLNonNull(GraphQLString) },
+  }),
+});
+
+const UnSubscribeToGraphQLInputType = new GraphQLInputObjectType({
+  name: "unSubscribeToInputType",
+  fields: () => ({
+    userId: { type: new GraphQLNonNull(GraphQLString) },
+    paramsId: { type: new GraphQLNonNull(GraphQLString) },
+  }),
+});
+
 const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
   fastify
 ): Promise<void> => {
@@ -502,6 +518,49 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
 
                   return null
                 }
+              },
+            },
+            subscribeToInputType: {
+              type: UserGraphQLType,
+              args: {
+                subscribeToTypeDTO: { type: SubscribeToGraphQLInputType }
+              },
+              resolve: async (_, { memberTypeDTO }) => {
+                const { userId, paramsId } = memberTypeDTO
+
+                const mainUser = await fastify.db.users.findOne({ key: 'id', equals: userId })
+
+                if (mainUser) {
+                  mainUser.subscribedToUserIds = [...mainUser?.subscribedToUserIds, paramsId]
+
+                  return fastify.db.users.change(userId, mainUser)
+                }
+
+                return null
+              },
+            },
+            unSubscribeToInputType: {
+              type: UserGraphQLType,
+              args: {
+                usSubscribeToTypeDTO: { type: UnSubscribeToGraphQLInputType }
+              },
+              resolve: async (_, { memberTypeDTO }) => {
+                const { userId, paramsId } = memberTypeDTO
+
+
+                if (uuid.validate(userId) && uuid.validate(paramsId)) {
+                  const mainUser = await fastify.db.users.findOne({ key: 'id', equals: userId })
+
+                  if (mainUser && mainUser?.subscribedToUserIds?.includes(paramsId)) {
+                    mainUser.subscribedToUserIds = mainUser?.subscribedToUserIds.filter((_id) => _id !== paramsId)
+
+                    return fastify.db.users.change(userId, mainUser)
+                  }
+
+                  return null
+                }
+
+                return null
               },
             },
           }),
