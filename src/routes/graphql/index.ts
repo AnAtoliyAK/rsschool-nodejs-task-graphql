@@ -1,25 +1,23 @@
 import { FastifyPluginAsyncJsonSchemaToTs } from '@fastify/type-provider-json-schema-to-ts';
-import { graphql, GraphQLInt, GraphQLList, GraphQLNonNull, GraphQLObjectType, GraphQLSchema, GraphQLString, Source } from 'graphql';
+import { graphql, GraphQLInputObjectType, GraphQLInt, GraphQLList, GraphQLNonNull, GraphQLObjectType, GraphQLSchema, GraphQLString, Source } from 'graphql';
 import { ProfileEntity } from '../../utils/DB/entities/DBProfiles';
 import { graphqlBodySchema } from './schema';
 import uuid = require('uuid');
 
 const UserGraphQLType = new GraphQLObjectType({
   name: "User",
-  fields: {
+  fields: () => ({
     id: { type: new GraphQLNonNull(GraphQLString) },
     firstName: { type: new GraphQLNonNull(GraphQLString) },
     lastName: { type: new GraphQLNonNull(GraphQLString) },
     email: { type: new GraphQLNonNull(GraphQLString) },
     subscribedToUserIds: { type: new GraphQLList(GraphQLString) },
-  },
+  }),
 });
-
-
 
 const ProfileGraphQLType = new GraphQLObjectType({
   name: "Profile",
-  fields: {
+  fields: () => ({
     id: { type: new GraphQLNonNull(GraphQLString) },
     avatar: { type: new GraphQLNonNull(GraphQLString) },
     sex: { type: new GraphQLNonNull(GraphQLString) },
@@ -29,31 +27,31 @@ const ProfileGraphQLType = new GraphQLObjectType({
     city: { type: new GraphQLNonNull(GraphQLString) },
     memberTypeId: { type: new GraphQLNonNull(GraphQLString) },
     userId: { type: new GraphQLNonNull(GraphQLString) },
-  },
+  }),
 });
 
 const PostGraphQLType = new GraphQLObjectType({
   name: "Post",
-  fields: {
+  fields: () => ({
     id: { type: new GraphQLNonNull(GraphQLString) },
     title: { type: new GraphQLNonNull(GraphQLString) },
     content: { type: new GraphQLNonNull(GraphQLString) },
     userId: { type: new GraphQLNonNull(GraphQLString) },
-  },
+  }),
 });
 
 const MemberGraphQLType = new GraphQLObjectType({
   name: "MemberType",
-  fields: {
+  fields: () => ({
     id: { type: new GraphQLNonNull(GraphQLString) },
     discount: { type: new GraphQLNonNull(GraphQLInt) },
     monthPostsLimit: { type: new GraphQLNonNull(GraphQLInt) },
-  },
+  }),
 });
 
 const FullUserGraphQLType = new GraphQLObjectType({
   name: "FullUser",
-  fields: {
+  fields: () => ({
     id: { type: new GraphQLNonNull(GraphQLString) },
     firstName: { type: new GraphQLNonNull(GraphQLString) },
     lastName: { type: new GraphQLNonNull(GraphQLString) },
@@ -62,22 +60,21 @@ const FullUserGraphQLType = new GraphQLObjectType({
     posts: { type: new GraphQLList(PostGraphQLType) },
     profiles: { type: new GraphQLList(ProfileGraphQLType) },
     memberTypes: { type: new GraphQLList(MemberGraphQLType) },
-    subscribedToProfiles: { type: new GraphQLList(ProfileGraphQLType) },
+    userSubscribedToProfiles: { type: new GraphQLList(ProfileGraphQLType) },
     subscribedToPosts: { type: new GraphQLList(ProfileGraphQLType) },
-  },
+    userSubscribedToUsers: { type: new GraphQLList(UserGraphQLType) },
+    subscribedToUserUsers: { type: new GraphQLList(UserGraphQLType) },
+  }),
 });
 
-// const UserWithSubscribedToProfilesGraphQLType = new GraphQLObjectType({
-//   name: "UserWithSubscribedTo",
-//   fields: {
-//     id: { type: new GraphQLNonNull( GraphQLString) },
-//     firstName: { type: new GraphQLNonNull( GraphQLString) },
-//     lastName: { type: new GraphQLNonNull( GraphQLString) },
-//     email: { type: new GraphQLNonNull( GraphQLString) },
-//     subscribedToUserIds: { type: new GraphQLList(GraphQLString) },
-//     profiles: { type: new GraphQLList(ProfileGraphQLType) },
-//   },
-// });
+export const CreateUserGraphQLInputType = new GraphQLInputObjectType({
+  name: "createUserInputType",
+  fields: () => ({
+    firstName: { type: new GraphQLNonNull(GraphQLString) },
+    lastName: { type: new GraphQLNonNull(GraphQLString) },
+    email: { type: new GraphQLNonNull(GraphQLString) },
+  }),
+});
 
 const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
   fastify
@@ -205,13 +202,14 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
               type: FullUserGraphQLType,
               async resolve() {
                 const users = await fastify.db.users.findMany();
-
                 const userWithSubscription = users?.map(async (user) => {
-                  const subscribedToProfiles = user?.subscribedToUserIds?.map(async (subscribedToUserId) => {
-                    return fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId });
+                  const userSubscribedToProfiles = users?.filter(
+                    (_user) => _user?.subscribedToUserIds?.includes(user?.id)
+                  )?.map(async (subscribedToUserId) => {
+                    return fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId?.id });
                   })
 
-                  return { ...user, subscribedToProfiles }
+                  return { ...user, userSubscribedToProfiles }
                 })
                 return userWithSubscription;
               },
@@ -240,6 +238,28 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
 
                 return { ...user, posts, profiles, subscribedToPosts };
               },
+              usersWithSubscriptions: {
+                type: new GraphQLList(FullUserGraphQLType),
+                async resolve() {
+                  const users = await fastify.db.users.findMany();
+
+                  const fullUsers = users?.map(async (user) => {
+                    const subscribedToUserUsers = user?.subscribedToUserIds?.map(async (userId) => {
+                      const subscribedUser = await fastify.db.users.findOne({ key: 'id', equals: userId });
+
+                      return subscribedUser
+                    })
+
+                    const userSubscribedToUsers = users?.filter(
+                      (_user) => _user?.subscribedToUserIds?.includes(user?.id)
+                    )
+
+                    return { ...user, userSubscribedToUsers, subscribedToUserUsers }
+                  })
+
+                  return fullUsers;
+                },
+              },
             },
           }),
         }),
@@ -249,12 +269,11 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
             createUser: {
               type: UserGraphQLType,
               args: {
-                firstName: { type: new GraphQLNonNull(GraphQLString) },
-                lastName: { type: new GraphQLNonNull(GraphQLString) },
-                email: { type: new GraphQLNonNull(GraphQLString) },
+                userDTO: { type: CreateUserGraphQLInputType },
               },
-              resolve: async (_, args) => {
-                const user = await fastify.db.users.create(args);
+              resolve: async (_, { userDTO }) => {
+                console.log('U', userDTO)
+                const user = await fastify.db.users.create(userDTO);
 
                 return user;
               },
