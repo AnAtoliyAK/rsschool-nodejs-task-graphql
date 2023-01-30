@@ -1,14 +1,16 @@
 import { FastifyPluginAsyncJsonSchemaToTs } from '@fastify/type-provider-json-schema-to-ts';
 import { graphql, GraphQLInt, GraphQLList, GraphQLNonNull, GraphQLObjectType, GraphQLSchema, GraphQLString, Source } from 'graphql';
+import { ProfileEntity } from '../../utils/DB/entities/DBProfiles';
 import { graphqlBodySchema } from './schema';
+import uuid = require('uuid');
 
 const UserGraphQLType = new GraphQLObjectType({
   name: "User",
   fields: {
-    id: { type: GraphQLString },
-    firstName: { type: GraphQLString },
-    lastName: { type: GraphQLString },
-    email: { type: GraphQLString },
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    firstName: { type: new GraphQLNonNull(GraphQLString) },
+    lastName: { type: new GraphQLNonNull(GraphQLString) },
+    email: { type: new GraphQLNonNull(GraphQLString) },
     subscribedToUserIds: { type: new GraphQLList(GraphQLString) },
   },
 });
@@ -18,50 +20,64 @@ const UserGraphQLType = new GraphQLObjectType({
 const ProfileGraphQLType = new GraphQLObjectType({
   name: "Profile",
   fields: {
-    id: { type: GraphQLString },
-    avatar: { type: GraphQLString },
-    sex: { type: GraphQLString },
-    birthday: { type: GraphQLInt },
-    country: { type: GraphQLString },
-    street: { type: GraphQLString },
-    city: { type: GraphQLString },
-    memberTypeId: { type: GraphQLString },
-    userId: { type: GraphQLString },
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    avatar: { type: new GraphQLNonNull(GraphQLString) },
+    sex: { type: new GraphQLNonNull(GraphQLString) },
+    birthday: { type: new GraphQLNonNull(GraphQLInt) },
+    country: { type: new GraphQLNonNull(GraphQLString) },
+    street: { type: new GraphQLNonNull(GraphQLString) },
+    city: { type: new GraphQLNonNull(GraphQLString) },
+    memberTypeId: { type: new GraphQLNonNull(GraphQLString) },
+    userId: { type: new GraphQLNonNull(GraphQLString) },
   },
 });
 
 const PostGraphQLType = new GraphQLObjectType({
   name: "Post",
   fields: {
-    id: { type: GraphQLString },
-    title: { type: GraphQLString },
-    content: { type: GraphQLString },
-    userId: { type: GraphQLString },
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    title: { type: new GraphQLNonNull(GraphQLString) },
+    content: { type: new GraphQLNonNull(GraphQLString) },
+    userId: { type: new GraphQLNonNull(GraphQLString) },
   },
 });
 
 const MemberGraphQLType = new GraphQLObjectType({
   name: "MemberType",
   fields: {
-    id: { type: GraphQLString },
-    discount: { type: GraphQLInt },
-    monthPostsLimit: { type: GraphQLInt },
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    discount: { type: new GraphQLNonNull(GraphQLInt) },
+    monthPostsLimit: { type: new GraphQLNonNull(GraphQLInt) },
   },
 });
 
 const FullUserGraphQLType = new GraphQLObjectType({
   name: "FullUser",
   fields: {
-    id: { type: GraphQLString },
-    firstName: { type: GraphQLString },
-    lastName: { type: GraphQLString },
-    email: { type: GraphQLString },
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    firstName: { type: new GraphQLNonNull(GraphQLString) },
+    lastName: { type: new GraphQLNonNull(GraphQLString) },
+    email: { type: new GraphQLNonNull(GraphQLString) },
     subscribedToUserIds: { type: new GraphQLList(GraphQLString) },
     posts: { type: new GraphQLList(PostGraphQLType) },
     profiles: { type: new GraphQLList(ProfileGraphQLType) },
     memberTypes: { type: new GraphQLList(MemberGraphQLType) },
+    subscribedToProfiles: { type: new GraphQLList(ProfileGraphQLType) },
+    subscribedToPosts: { type: new GraphQLList(ProfileGraphQLType) },
   },
 });
+
+// const UserWithSubscribedToProfilesGraphQLType = new GraphQLObjectType({
+//   name: "UserWithSubscribedTo",
+//   fields: {
+//     id: { type: new GraphQLNonNull( GraphQLString) },
+//     firstName: { type: new GraphQLNonNull( GraphQLString) },
+//     lastName: { type: new GraphQLNonNull( GraphQLString) },
+//     email: { type: new GraphQLNonNull( GraphQLString) },
+//     subscribedToUserIds: { type: new GraphQLList(GraphQLString) },
+//     profiles: { type: new GraphQLList(ProfileGraphQLType) },
+//   },
+// });
 
 const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
   fastify
@@ -76,12 +92,12 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
     },
     async function (request, reply) {
       const source: string | Source = String(request.body.query!);
+      const variableValues = request.body.variables!;
 
-      console.log('s', source);
       const schema = new GraphQLSchema({
         query: new GraphQLObjectType({
           name: "GetAllEntities",
-          fields: {
+          fields: () => ({
             users: {
               type: new GraphQLList(UserGraphQLType),
               resolve() {
@@ -113,21 +129,17 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                   type: new GraphQLNonNull(GraphQLString),
                 },
               },
-              resolve: (_, id) => {
-
-                return fastify.db.memberTypes.findOne({ key: 'id', equals: id.id });
+              resolve: (_, args) => {
+                return fastify.db.users.findOne({ key: 'id', equals: args.id });
               }
             },
             profile: {
               type: new GraphQLNonNull(ProfileGraphQLType),
               args: {
-                id: {
-                  type: new GraphQLNonNull(GraphQLString),
-                },
+                id: { type: new GraphQLNonNull(GraphQLString), },
               },
-              resolve: (_, id) => {
-
-                return fastify.db.memberTypes.findOne({ key: 'id', equals: id.id });
+              resolve: (_, args) => {
+                return fastify.db.memberTypes.findOne({ key: 'id', equals: args.id });
               },
             },
             post: {
@@ -137,9 +149,8 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                   type: new GraphQLNonNull(GraphQLString),
                 },
               },
-              resolve: (_, id) => {
-
-                return fastify.db.memberTypes.findOne({ key: 'id', equals: id.id });
+              resolve: (_, args) => {
+                return fastify.db.posts.findOne({ key: 'id', equals: args.id });
               },
             },
             memberType: {
@@ -149,9 +160,8 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                   type: new GraphQLNonNull(GraphQLString),
                 },
               },
-              resolve: (_, id) => {
-
-                return fastify.db.memberTypes.findOne({ key: 'id', equals: id.id });
+              resolve: (_, args) => {
+                return fastify.db.memberTypes.findOne({ key: 'id', equals: args.id });
               },
             },
             fullUsers: {
@@ -172,59 +182,167 @@ const plugin: FastifyPluginAsyncJsonSchemaToTs = async (
                 })
                 return fullUsers;
               },
-            }
-          },
+            },
+            fullUser: {
+              type: FullUserGraphQLType,
+              args: {
+                id: {
+                  type: new GraphQLNonNull(GraphQLString),
+                },
+              },
+              async resolve(_, args) {
+                const user = await fastify.db.users.findOne({ key: 'id', equals: args.id });
+                const posts = await fastify.db.posts.findMany({ key: 'userId', equals: args.id });
+                const profiles = await fastify.db.profiles.findMany({ key: 'userId', equals: args.id });
+                const memberTypes = profiles?.map(async (profile) => {
+                  return fastify.db.memberTypes.findMany({ key: 'id', equals: profile.memberTypeId });
+                })
+
+                return { ...user, posts, profiles, memberTypes };
+              },
+            },
+            userWithSubscribedTo: {
+              type: FullUserGraphQLType,
+              async resolve() {
+                const users = await fastify.db.users.findMany();
+
+                const userWithSubscription = users?.map(async (user) => {
+                  const subscribedToProfiles = user?.subscribedToUserIds?.map(async (subscribedToUserId) => {
+                    return fastify.db.profiles.findMany({ key: 'userId', equals: subscribedToUserId });
+                  })
+
+                  return { ...user, subscribedToProfiles }
+                })
+                return userWithSubscription;
+              },
+            },
+            userWithHisSubscribedTo: {
+              type: FullUserGraphQLType,
+              args: {
+                id: {
+                  type: new GraphQLNonNull(GraphQLString),
+                },
+              },
+              async resolve(_, args) {
+                const user = await fastify.db.users.findOne({ key: 'id', equals: args.id });
+                const posts = await fastify.db.posts.findMany({ key: 'userId', equals: args.id });
+                const profiles = await fastify.db.profiles.findMany({ key: 'userId', equals: args.id });
+
+                const subscribedToPosts = user?.subscribedToUserIds?.map(async (userId) => {
+                  const subscribedUser = await fastify.db.users.findOne({ key: 'id', equals: userId });
+                  if (subscribedUser?.id) {
+
+                    const subscribedPosts = await fastify.db.posts.findMany({ key: 'userId', equals: subscribedUser?.id });
+                    return subscribedPosts
+                  }
+                  return []
+                })
+
+                return { ...user, posts, profiles, subscribedToPosts };
+              },
+            },
+          }),
         }),
         mutation: new GraphQLObjectType({
           name: "TODO_some_name",
-          fields: {
+          fields: () => ({
             createUser: {
               type: UserGraphQLType,
               args: {
-                firstName: { type: GraphQLString },
-                lastName: { type: GraphQLString },
-                email: { type: GraphQLString },
+                firstName: { type: new GraphQLNonNull(GraphQLString) },
+                lastName: { type: new GraphQLNonNull(GraphQLString) },
+                email: { type: new GraphQLNonNull(GraphQLString) },
               },
               resolve: async (_, args) => {
                 const user = await fastify.db.users.create(args);
+
                 return user;
               },
             },
             createProfile: {
               type: ProfileGraphQLType,
               args: {
-                avatar: { type: GraphQLString },
-                sex: { type: GraphQLString },
-                birthday: { type: GraphQLString },
-                country: { type: GraphQLString },
-                street: { type: GraphQLString },
-                city: { type: GraphQLString },
-                memberTypeId: { type: GraphQLString },
-                userId: { type: GraphQLString },
+                avatar: { type: new GraphQLNonNull(GraphQLString) },
+                sex: { type: new GraphQLNonNull(GraphQLString) },
+                birthday: { type: new GraphQLNonNull(GraphQLInt) },
+                country: { type: new GraphQLNonNull(GraphQLString) },
+                street: { type: new GraphQLNonNull(GraphQLString) },
+                city: { type: new GraphQLNonNull(GraphQLString) },
+                memberTypeId: { type: new GraphQLNonNull(GraphQLString) },
+                userId: { type: new GraphQLNonNull(GraphQLString) },
               },
               resolve: async (_, args) => {
-                const profile = await fastify.db.profiles.create(args);
+                const profile: ProfileEntity = await fastify.db.profiles.create(args);
+
                 return profile;
               },
             },
             createPost: {
               type: PostGraphQLType,
               args: {
-                title: { type: GraphQLString },
-                content: { type: GraphQLString },
-                userId: { type: GraphQLString },
+                title: { type: new GraphQLNonNull(GraphQLString) },
+                content: { type: new GraphQLNonNull(GraphQLString) },
+                userId: { type: new GraphQLNonNull(GraphQLString) },
               },
               resolve: async (_, args) => {
                 const post = await fastify.db.posts.create(args);
+
                 return post;
               },
             },
+            updateUser: {
+              type: UserGraphQLType,
+              args: {
+                id: { type: new GraphQLNonNull(GraphQLString) },
+                firstName: { type: GraphQLString },
+                lastName: { type: GraphQLString },
+                email: { type: GraphQLString },
+              },
+              resolve: async (_, args) => {
+                const { id: userId, firstName, lastName, email } = args
 
-          },
+                if (uuid.validate(args?.id)) {
+                  const user = await fastify.db.users.findOne({ key: 'id', equals: userId })
+
+                  if (!user) {
+                    return null
+                  }
+
+                  return fastify.db.users.change(userId, { firstName, lastName, email })
+                }
+              },
+            },
+            updateProfile: {
+              type: ProfileGraphQLType,
+              args: {
+                id: { type: new GraphQLNonNull(GraphQLString) },
+                avatar: { type: GraphQLString },
+                sex: { type: GraphQLString },
+                birthday: { type: GraphQLInt },
+                country: { type: GraphQLString },
+                street: { type: GraphQLString },
+                city: { type: GraphQLString },
+                memberTypeId: { type: GraphQLString },
+              },
+              resolve: async (_, args) => {
+                const { id: profileId, avatar, sex, birthday, country, street, city, memberTypeId } = args
+
+                if (uuid.validate(profileId)) {
+                  const profile = await fastify.db.profiles.findOne({ key: 'id', equals: profileId })
+
+                  if (!profile) {
+                    return null
+                  }
+
+                  return fastify.db.profiles.change(profileId, { avatar, sex, birthday, country, street, city, memberTypeId })
+                }
+              },
+            },
+          }),
         }),
       });
 
-      return await graphql({ schema, source });
+      return await graphql({ schema, source, variableValues });
     }
   );
 };
